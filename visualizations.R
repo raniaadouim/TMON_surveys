@@ -26,7 +26,7 @@ master <- master |>
 # Static maps w/ satellite -----------------------------------------------------
 
 # Registering my Google API
-register_google(key = "AIzaSyDSlz9jiVI7KCjHRFpD2IXxwrNzaF1id9U")
+register_google(key = "")
 
 # Retrieving satellite image
 satellite <- get_googlemap(center = c(lon = -76.546114, lat = 38.875756),
