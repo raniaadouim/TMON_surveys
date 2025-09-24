@@ -192,3 +192,49 @@ scam_map
 #   )
 # )
 # browsable(temp)
+
+
+# Initial Salinity Measurements ------------------------------------------------
+justelev <- master |>
+  select(transect, plot, elevation) |>
+  distinct()
+
+sal_raw <- read_csv("raw_data/initial_salinity.csv")
+
+salinity <- sal_raw |>
+  left_join(justelev, by = c("transect", "plot")) |>
+  mutate(plot = factor(plot), salinity = as.numeric(salinity), 
+         # When I put as numeric, plot 17 gets NA'd. Fixing that here
+         salinity = ifelse(plot == 17, 11.4, salinity))
+
+# Salinity vs. elevation scatterplot
+ggplot(salinity, aes(x = elevation, y = salinity, color = plot)) +
+  geom_point() 
+
+# Linear model predicting salinity by elevation
+salelev <- lm(salinity ~ elevation, data = salinity)
+summary(salelev)
+
+
+iva <- master |>
+  group_by(year, species_code) |>
+  summarize(sum = sum(total_biomass, na.rm = T)) 
+
+ggplot(iva, aes(x = year, y = sum)) +
+  geom_point() + 
+  geom_line() +
+  facet_wrap(~species_code, scales = "free")
+
+phau <- master |>
+  filter(species_code == "IVFR") |>
+  drop_na(total_biomass) |>
+  group_by(transect, plot) |>
+  mutate(sum = sum(total_biomass, na.rm = T)) |>
+  filter(sum > 0) 
+
+ggplot(phau, aes(x = year, y = change_ivfr))  +
+  geom_point() +
+  geom_line()
+
+phauchange <- lm(change_ivfr ~ year, data = phau)
+summary(phauchange)

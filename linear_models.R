@@ -1,49 +1,51 @@
+# In this R script, I create linear models predicting change in plant biomass
+# for each species. Some data wrangling is performed as well.
+
 # Loading packagaes ------------------------------------------------------------
 library(tidyverse)
 library(ggplot2)
 library(MASS)
-load("processed_data/interest.Rdata")
+load("processed_data/master.Rdata")
 
-# AIC Fitting ------------------------------------------------------------------
+# Preparing data sets ----------------------------------------------------------
 
-phau <- interest |>
+# Creating the data set that will be used to predict PHAU biomass
+phau <- master |>
   group_by(transect, plot) |>
   filter(species_code == "PHAU") |>
   # Removing plots where the plant never shows up, and years where biomass goes 
-  # from 0 to 0 (aka has not yet appeared)
+  # from 0 to 0 (meaning the plant has not yet appeared)
   mutate(sum = sum(total_biomass, na.rm = TRUE)) |>
-  filter(sum > 0, change_log_phau != 0) |>
+  filter(sum > 0, change_phau != 0) |>
   ungroup() |>
-  dplyr::select(change_log_phau, loag_phau, loag_scam, loag_ivfr, 
-                fld_dur_spr, year) |>
+  dplyr::select(year, change_log_phau, loag_phau, loag_scam, loag_ivfr, 
+                fld_dur_spr) |>
   drop_na() |>
+  # Converting the decimal into a percentage
   mutate(fld_dur_spr = 100 * fld_dur_spr)
 
-scam <- interest |>
+# Repeating the same process for SCAM and IVFR
+scam <- master |>
   group_by(transect, plot) |>
   filter(species_code == "SCAM") |>
-  # Removing plots where the plant never shows up, and years where biomass goes 
-  # from 0 to 0 (aka has not yet appeared)
   mutate(sum = sum(total_biomass, na.rm = TRUE)) |>
-  filter(sum > 0, change_log_scam != 0) |>
+  filter(sum > 0, change_scam != 0) |>
   ungroup() |>
   dplyr::select(change_log_scam, loag_phau, loag_scam, loag_ivfr, 
                 fld_dur_spr, year) |>
   drop_na()
 
-ivfr <- interest |>
+ivfr <- master |>
   group_by(transect, plot) |>
   filter(species_code == "IVFR") |>
-  # Removing plots where the plant never shows up, and years where biomass goes 
-  # from 0 to 0 (aka has not yet appeared)
   mutate(sum = sum(total_biomass, na.rm = TRUE)) |>
-  filter(sum > 0, change_log_ivfr != 0) |>
+  filter(sum > 0, change_ivfr != 0) |>
   ungroup() |>
   dplyr::select(change_log_ivfr, loag_phau, loag_scam, loag_ivfr, 
                 fld_dur_spr, year) |>
   drop_na()
 
-# PHAU +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Using AVS and AIC to fit a PHAU model ----------------------------------------
 phau_aic <- lm(change_log_phau ~ ., data = phau)
 stepAIC(phau_aic, direction = "both")
 
@@ -55,16 +57,16 @@ summary(phau_mod)
 phau_mod2 <- lm(change_log_phau ~ loag_phau + fld_dur_spr, data = phau)
 summary(phau_mod2)
 
-# Nested F-Test - no important info is missing
+# Nested F-Test 
 anova(phau_mod2, phau_mod, phau_aic) 
 
-# Calculating VIFs to test for multicollinearity - no issues
+# Calculating VIFs to test for multicollinearity 
 car::vif(phau_mod2)
 
 # Plotting PHAU ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
-# Redoing to drop fewer NAs 
-phau2 <- interest |>
+# Creating a new dataset for PHAU that drops fewer NA values
+phau2 <- master |>
   group_by(transect, plot) |>
   filter(species_code == "PHAU") |>
   # Removing plots where the plant never shows up, and years where biomass goes 
@@ -72,19 +74,17 @@ phau2 <- interest |>
   mutate(sum = sum(total_biomass, na.rm = TRUE)) |>
   filter(sum > 0, change_log_phau != 0) |>
   ungroup() |>
+  # Limiting the number of variables considered
   dplyr::select(change_log_phau, loag_phau, fld_dur_spr, elevation) |>
-  mutate(categ = case_when(elevation < 0.18 ~ "low", 
-                           elevation > 0.271 ~ "high", 
-                           TRUE ~ "mid")) |>
   drop_na() |>
   mutate(fld_dur_spr = 100 * fld_dur_spr) 
   
-fld <- interest |>
+fld <- master |>
   ungroup() |>
   dplyr::select(fld_dur_spr) |>
   summarize(med = median(fld_dur_spr, na.rm = T))
 
-
+# Visualizing relationship between significant model variables
 phau2 |>
   ggplot(aes(x = loag_phau, y = change_log_phau)) +
   geom_point(size = 3) + 
@@ -110,14 +110,7 @@ phau2 |>
   scale_color_gradient2(low = "purple", mid = "darkgray", high = "green", 
                         midpoint = 33.12) 
 
-
-  
-# 450, 600
-
-
-
-
-# SCAM +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Using AVS and AIC to fit a SCAM model ----------------------------------------
 scam_aic <- lm(change_log_scam ~ ., data = scam)
 stepAIC(scam_aic, direction = "both")
 
@@ -128,14 +121,16 @@ summary(scam_mod)
 scam_mod2 <- lm(change_log_scam ~ loag_phau + loag_scam, data = scam)
 summary(scam_mod2)
 
-# Nested F-Test - no important info is missing in scam_mod2
+# Nested F-Test 
 anova(scam_mod2, scam_mod, scam_aic) 
 
-# Calculating VIFs to test for multicollinearity - no issues
+# Calculating VIFs to test for multicollinearity 
 car::vif(scam_mod2)
 
-# Redoing to drop fewer NAs 
-scam2 <- interest |>
+# Plotting SCAM ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+# New data set that dorps fewer NAs 
+scam2 <- master |>
   group_by(transect, plot) |>
   filter(species_code == "SCAM") |>
   # Removing plots where the plant never shows up, and years where biomass goes 
@@ -144,16 +139,12 @@ scam2 <- interest |>
   filter(sum > 0, change_log_scam != 0) |>
   ungroup() |>
   dplyr::select(change_log_scam, loag_phau, loag_scam, elevation) |>
-  mutate(categ = case_when(elevation < 0.18 ~ "low", 
-                           elevation > 0.271 ~ "high", 
-                           TRUE ~ "mid")) |>
   drop_na() 
 
-loagp <- interest |>
+loagp <- master |>
   ungroup() |>
   dplyr::select(loag_phau) |>
   summarize(mean = mean(loag_phau, na.rm = T))
-
 
 scam2 |>
   ggplot(aes(x = loag_scam, y = change_log_scam)) +
@@ -180,17 +171,18 @@ scam2 |>
   scale_color_gradient2(low = "purple", mid = "darkgray", high = "green", 
                         midpoint = 2.42) 
 
-# IVFR +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+# Using AVS and AIC to fit an IVFR model ---------------------------------------
 ivfr_aic <- lm(change_log_ivfr ~ ., data = ivfr)
 stepAIC(ivfr_aic, direction = "both")
 
 ivfr_mod <- lm(change_log_ivfr ~ loag_phau + loag_ivfr, data = ivfr)
 summary(ivfr_mod)
 
-# Nested F-Test - no important info is missing in ivfr_mod
+# Nested F-Test 
 anova(ivfr_mod, ivfr_aic) 
 
-ivfr2 <- interest |>
+# Plotting IVFR ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ivfr2 <- master |>
   group_by(transect, plot) |>
   filter(species_code == "IVFR") |>
   # Removing plots where the plant never shows up, and years where biomass goes 
@@ -200,12 +192,6 @@ ivfr2 <- interest |>
   ungroup() |>
   dplyr::select(change_log_ivfr, loag_phau, loag_ivfr, elevation) |>
   drop_na()
-
-loagp <- interest |>
-  ungroup() |>
-  dplyr::select(loag_phau) |>
-  summarize(mean = mean(loag_phau, na.rm = T))
-
 
 ivfr2 |>
   ggplot(aes(x = loag_ivfr, y = change_log_ivfr, color = loag_phau)) +
